@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
@@ -146,10 +146,22 @@ const allDomains=[...domainGroups.Math,...domainGroups["Reading & Writing"]];
 function domainValue(profile,domain){return Number(profile.domainStrengths?.[domain] ?? 50)}
 function RadarChart({profile}){
   const cx=160,cy=160,r=105,n=allDomains.length;
-  const point=(i,val)=>{const a=-Math.PI/2+i*2*Math.PI/n;const rr=r*(val/100);return [cx+Math.cos(a)*rr,cy+Math.sin(a)*rr]};
-  const grid=[25,50,75,100].map(v=>allDomains.map((_,i)=>point(i,v).join(',')).join(' '));
-  const poly=allDomains.map((d,i)=>point(i,domainValue(profile,d)).join(',')).join(' ');
-  return <div className="radar-wrap"><svg viewBox="0 0 320 320" className="radar" role="img" aria-label="SAT skill mastery radar chart">{grid.map((g,i)=><polygon key={i} points={g} className="radar-grid"/>)}{allDomains.map((d,i)=>{const [x,y]=point(i,100);return <line key={d} x1={cx} y1={cy} x2={x} y2={y} className="radar-axis"/>})}<polygon points={poly} className="radar-fill"/><polyline points={poly} className="radar-line"/>{allDomains.map((d,i)=>{const [x,y]=point(i,100);const a=-Math.PI/2+i*2*Math.PI/n;const lx=cx+Math.cos(a)*136,ly=cy+Math.sin(a)*136;return <g key={d}><circle cx={point(i,domainValue(profile,d))[0]} cy={point(i,domainValue(profile,d))[1]} r="4" className="radar-dot"/><text x={lx} y={ly} textAnchor={Math.abs(Math.cos(a))<.25?'middle':Math.cos(a)>0?'start':'end'} dominantBaseline="middle" className="radar-label">{d.replace('Problem-Solving & Data Analysis','Data Analysis').replace('Geometry & Trigonometry','Geometry')}</text></g>})}</svg></div>
+  const [animation,setAnimation]=useState(0);
+  useEffect(()=>{
+    let frame; const start=performance.now(); const duration=900;
+    const tick=now=>{const t=Math.min(1,(now-start)/duration); const eased=1-Math.pow(1-t,3); setAnimation(eased); if(t<1) frame=requestAnimationFrame(tick)};
+    frame=requestAnimationFrame(tick);
+    return()=>cancelAnimationFrame(frame);
+  },[profile]);
+  // Rotate the eight axes by 22.5° so the top is a flat edge rather than a vertex.
+  const point=(i,val,scale=animation)=>{const a=-Math.PI/2+Math.PI/n+i*2*Math.PI/n;const rr=r*(val/100)*scale;return [cx+Math.cos(a)*rr,cy+Math.sin(a)*rr]};
+  const fixedPoint=(i,val)=>{const a=-Math.PI/2+Math.PI/n+i*2*Math.PI/n;const rr=r*(val/100);return [cx+Math.cos(a)*rr,cy+Math.sin(a)*rr]};
+  const grid=[25,50,75,100].map(v=>allDomains.map((_,i)=>fixedPoint(i,v).join(',')).join(' '));
+  const currentValues=allDomains.map(d=>domainValue(profile,d));
+  const targetValues=allDomains.map(d=>Math.max(domainValue(profile,d),Math.min(95,domainValue(profile,d)+15)));
+  const poly=currentValues.map((v,i)=>point(i,v).join(',')).join(' ');
+  const targetPoly=targetValues.map((v,i)=>point(i,v).join(',')).join(' ');
+  return <div className="radar-wrap"><div className="radar-title"><span>SAT SKILL PROFILE</span><small>Live mastery</small></div><svg viewBox="0 0 320 320" className="radar" role="img" aria-label="Animated SAT skill mastery radar chart">{grid.map((g,i)=><polygon key={i} points={g} className="radar-grid"/>)}{allDomains.map((d,i)=>{const [x,y]=fixedPoint(i,100);return <line key={d} x1={cx} y1={cy} x2={x} y2={y} className="radar-axis"/>})}<polygon points={targetPoly} className="radar-target"/><polygon points={poly} className="radar-fill"/><polyline points={poly} className="radar-line"/>{allDomains.map((d,i)=>{const a=-Math.PI/2+Math.PI/n+i*2*Math.PI/n;const lx=cx+Math.cos(a)*136,ly=cy+Math.sin(a)*136;const [dx,dy]=point(i,currentValues[i]);return <g key={d}><circle cx={dx} cy={dy} r="5" className="radar-dot"/><text x={lx} y={ly} textAnchor={Math.abs(Math.cos(a))<.25?'middle':Math.cos(a)>0?'start':'end'} dominantBaseline="middle" className="radar-label">{d.replace('Problem-Solving & Data Analysis','Data Analysis').replace('Geometry & Trigonometry','Geometry')}</text></g>})}</svg><div className="radar-legend"><span><i className="legend-current"/>Your current skills</span><span><i className="legend-target"/>Target range</span></div></div>
 }
 function ScoreLineChart({profile}){
   const data=(profile.scoreHistory||[]).filter(x=>Number(x.score)>0).slice(-8);
